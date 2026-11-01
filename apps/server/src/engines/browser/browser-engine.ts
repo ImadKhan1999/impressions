@@ -142,7 +142,22 @@ export class BrowserEngine {
     page.on('framenavigated', (f) => {
       if (f === main) lastNavAt = Date.now();
     });
-    // Inspect each document response for a meta refresh so the next navigation can be labelled.
+    // Meta refresh detection, part 1: the document reports its own <meta http-equiv=refresh> once
+    // parsed. This survives the response body being discarded by a fast refresh.
+    const metaDocs = new Set<string>();
+    await page.exposeBinding('__rcMetaRefresh', ({ frame }, href: unknown) => {
+      if (frame === main && typeof href === 'string') metaDocs.add(href);
+    });
+    await page.addInitScript(() => {
+      const check = () => {
+        if (document.querySelector('meta[http-equiv="refresh" i]')) {
+          (window as unknown as { __rcMetaRefresh?: (h: string) => void }).__rcMetaRefresh?.(location.href);
+        }
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', check, { once: true });
+      else check();
+    });
+    // Part 2: inspect each document response (Refresh header or body) so the next navigation can be labelled.
     page.on('response', (res) => {
       const rec = navs.find((n) => n.request === res.request());
       if (!rec || res.status() < 200 || res.status() >= 300) return;
@@ -192,7 +207,7 @@ export class BrowserEngine {
       }
     }
 
-    const hops = await this.buildHops(navs);
+    const hops = await this.buildHops(navs, metaDocs);
     const redirects = Math.max(0, hops.length - 1);
     if (redirects > settings.maxRedirects) warnings.push(`Chain exceeded ${settings.maxRedirects} redirects`);
 
@@ -204,7 +219,34 @@ export class BrowserEngine {
 
     const lastWithResponse = [...hops].reverse().find((h) => h.statusCode !== null) ?? null;
     const finalStatus = lastWithResponse?.statusCode ?? null;
-    const finalUrl = page.url();
+
+    // App deep links (intent://, market://, itms-apps://): the chain leaves the web. Browsers
+    // either abort that navigation or never start it, so detect both shapes.
+    const nonWeb = (u: string | null | undefined) => !!u && /^[a-z][a-z0-9+.-]*:/i.test(u) && !/^(https?|about|data|blob):/i.test(u);
+    const deepIdx = hops.findIndex((h) => nonWeb(h.url));
+    const lastHop0 = hops[hops.length - 1];
+    const deepTarget = deepIdx >= 0 ? hops[deepIdx]!.url : lastHop0 && nonWeb(lastHop0.location) ? lastHop0.location! : null;
+    if (deepTarget) {
+      const webHops = deepIdx >= 0 ? hops.slice(0, deepIdx) : hops;
+      const scheme = deepTarget.slice(0, deepTarget.indexOf(':') + 1).toLowerCase();
+      warnings.push(`Redirects to non-web URL scheme "${scheme}" (${deepTarget.slice(0, 200)})`);
+      return this.error(started, webHops, 'INVALID_REDIRECT', `Redirect to unsupported scheme ${scheme}`, warnings, { consoleErrors, failedRequests });
+    }
+    // A chain that ends on a redirect the browser did not follow.
+    const lastHop = hops[hops.length - 1];
+    if (lastHop?.statusCode && lastHop.statusCode >= 300 && lastHop.statusCode < 400) {
+      return this.error(
+        started,
+        hops,
+        'INVALID_REDIRECT',
+        lastHop.location ? `Browser did not follow the redirect to ${lastHop.location.slice(0, 200)}` : `HTTP ${lastHop.statusCode} without a usable Location header`,
+        warnings,
+        { consoleErrors, failedRequests },
+      );
+    }
+
+    const pageUrl = page.url();
+    const finalUrl = pageUrl === 'about:blank' || pageUrl.startsWith('chrome-error://') ? (lastHop?.url ?? pageUrl) : pageUrl;
 
     const [title, cookies, layout, timings] = await Promise.all([
       page.title().catch(() => null),
@@ -265,7 +307,7 @@ export class BrowserEngine {
     };
   }
 
-  private async buildHops(navs: NavRecord[]): Promise<RedirectHop[]> {
+  private async buildHops(navs: NavRecord[], metaDocs: Set<string>): Promise<RedirectHop[]> {
     const hops: RedirectHop[] = [];
     for (let i = 0; i < navs.length; i++) {
       const n = navs[i]!;
@@ -278,7 +320,8 @@ export class BrowserEngine {
       else {
         // Client-side navigation: meta refresh if the previous document declared one, otherwise script.
         const prev = navs.slice(0, i).reverse().find((x) => x.hasMetaRefresh !== null);
-        hopType = prev && (await prev.hasMetaRefresh!) ? 'meta' : 'js';
+        const isMeta = !!prev && (metaDocs.has(prev.request.url()) || (await prev.hasMetaRefresh!));
+        hopType = isMeta ? 'meta' : 'js';
       }
 
       const res = await req.response().catch(() => null);

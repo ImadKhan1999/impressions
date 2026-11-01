@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   LIMITS,
+  type BrowserEngineName,
   runCreateSchema,
   runSettingsSchema,
   type RunCreateInput,
@@ -19,6 +20,7 @@ import { executionEngine } from '../profiles/engine-map.js';
 import type { ProfileService } from '../profiles/service.js';
 import { playwrightProxy } from '../proxies/agents.js';
 import type { ProxyService } from '../proxies/service.js';
+import { BrowserPool } from '../engines/browser/browser-pool.js';
 import { RunExecutor, type ExecutorDeps } from './run-executor.js';
 
 export interface RunManagerDeps extends Omit<ExecutorDeps, 'runs'> {
@@ -97,6 +99,8 @@ export class RunManager {
       );
     }
 
+    if (input.mode !== 'http') this.assertBrowsersInstalled(profiles.map((p) => p.engine));
+
     if (input.proxyId !== null) {
       const proxy = this.d.proxies.resolve(input.proxyId);
       if (input.mode !== 'http') {
@@ -123,6 +127,22 @@ export class RunManager {
     return run;
   }
 
+  /** Fail fast instead of producing a run full of BROWSER_NOT_INSTALLED errors. */
+  private assertBrowsersInstalled(profileEngines: BrowserEngineName[]): void {
+    const strategy = this.d.settings.get().engineStrategy;
+    const needed = new Set(profileEngines.map((e) => executionEngine(e, strategy)));
+    const installed = new Map(BrowserPool.installed().map((b) => [b.engine, b.installed]));
+    const missing = [...needed].filter((e) => !installed.get(e));
+    if (missing.length) {
+      throw new AppError(
+        'BROWSER_NOT_INSTALLED',
+        `Browser engine${missing.length > 1 ? 's' : ''} not installed: ${missing.join(', ')}. Run "npm run setup" to install them, or switch Settings > Engine strategy to "Chromium only".`,
+        400,
+        { missing },
+      );
+    }
+  }
+
   duplicate(id: number): TestRun {
     const src = this.get(id);
     const run = this.d.runs.duplicate(id, `${src.name} (copy)`, 'draft');
@@ -136,6 +156,7 @@ export class RunManager {
       throw conflict(`Run is ${run.status}; only draft or paused runs can be started`);
     }
     if (this.shuttingDown) throw conflict('The application is shutting down');
+    if (run.mode !== 'http') this.assertBrowsersInstalled(this.d.runs.profileEngines(id) as BrowserEngineName[]);
     this.setStatus(id, 'queued', { error: null });
     this.pump();
     return this.get(id);

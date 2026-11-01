@@ -1,5 +1,5 @@
 import path from 'node:path';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { LIMITS } from '@impressions/shared';
@@ -12,12 +12,13 @@ import { systemRoutes } from './api/routes/system.js';
 import { urlRoutes } from './api/routes/urls.js';
 
 export interface BuildAppOptions {
-  logger?: boolean | object;
+  /** A pino logger instance to share with Fastify. Omit for a silent app (tests). */
+  logger?: FastifyBaseLogger;
 }
 
 export async function buildApp(ctx: AppContext, opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: opts.logger ?? false,
+    ...(opts.logger ? { loggerInstance: opts.logger } : { logger: false }),
     bodyLimit: 8 * 1024 * 1024,
     // Long-running exports and SSE must not be cut off.
     requestTimeout: 0,
@@ -57,21 +58,17 @@ export async function buildApp(ctx: AppContext, opts: BuildAppOptions = {}): Pro
   urlRoutes(app, ctx);
   runRoutes(app, ctx);
 
-  if (ctx.config.webDistDir) {
-    await app.register(fastifyStatic, {
-      root: ctx.config.webDistDir,
-      prefix: '/',
-      wildcard: false,
-      index: ['index.html'],
-    });
-    // SPA fallback: unknown non-API GET routes serve the app shell.
-    app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/')) {
-        return reply.type('text/html').sendFile('index.html', path.resolve(ctx.config.webDistDir!));
-      }
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: `Route ${req.method} ${req.url} not found` } });
-    });
+  const spaRoot = ctx.config.webDistDir ? path.resolve(ctx.config.webDistDir) : null;
+  if (spaRoot) {
+    await app.register(fastifyStatic, { root: spaRoot, prefix: '/', wildcard: false, index: ['index.html'] });
   }
+  app.setNotFoundHandler((req, reply) => {
+    // SPA fallback: unknown non-API GET routes serve the app shell.
+    if (spaRoot && req.method === 'GET' && !req.url.startsWith('/api/')) {
+      return reply.type('text/html').sendFile('index.html', spaRoot);
+    }
+    return reply.status(404).send({ error: { code: 'NOT_FOUND', message: `Route ${req.method} ${req.url} not found` } });
+  });
 
   return app;
 }

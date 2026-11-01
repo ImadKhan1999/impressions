@@ -28,9 +28,6 @@ export function registerErrorHandler(app: FastifyInstance): void {
     return reply.status(500).send({ error: { code: 'INTERNAL', message: `Internal error (request ${req.id})` } });
   });
 
-  app.setNotFoundHandler((req, reply) => {
-    reply.status(404).send({ error: { code: 'NOT_FOUND', message: `Route ${req.method} ${req.url} not found` } });
-  });
 }
 
 export function parseId(raw: unknown): number {

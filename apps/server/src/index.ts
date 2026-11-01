@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   if (purged) logger.info({ purged }, 'deleted runs past the retention window');
   setInterval(() => ctx.runs.applyRetention(), 6 * 3600_000).unref();
 
-  const app = await buildApp(ctx, { logger: logger as never });
+  const app = await buildApp(ctx, { logger });
   if (!config.webDistDir) logger.warn('UI build not found; run "npm run build" (or use "npm run dev" for development)');
 
   let stopping = false;

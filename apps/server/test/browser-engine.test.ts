@@ -104,6 +104,14 @@ suite('BrowserEngine (Chromium)', () => {
     expect(refused.errorCode).toBe('CONNECTION_REFUSED');
   });
 
+  it('reports redirects to app deep links as invalid instead of success', async () => {
+    const r = await run(site.url('/deeplink'), desktop);
+    expect(r.status).toBe('error');
+    expect(r.errorCode).toBe('INVALID_REDIRECT');
+    expect(r.finalUrl).not.toBe('about:blank');
+    expect(r.details.warnings?.some((w: string) => /non-web URL scheme/.test(w))).toBe(true);
+  });
+
   it('saves screenshots when enabled', async () => {
     const r = await run(site.url('/final'), iphone, { browser: { screenshot: true, settleMs: 200 } });
     expect(r.details.screenshot).toMatch(/^7\/\d+\.jpg$/);

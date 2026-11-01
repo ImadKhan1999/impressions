@@ -181,6 +181,14 @@ export interface RunCounters {
 export class RunRepository {
   constructor(private readonly db: DB) {}
 
+  /** Distinct profile engines snapshotted into a run. */
+  profileEngines(runId: number): string[] {
+    const rows = this.db
+      .prepare("SELECT DISTINCT json_extract(snapshot, '$.engine') AS e FROM test_run_profiles WHERE run_id = ?")
+      .all(runId) as { e: string | null }[];
+    return rows.map((r) => r.e).filter((e): e is string => !!e);
+  }
+
   /* ------------------------------ runs ------------------------------ */
 
   list(opts: { page: number; pageSize: number; status?: RunStatus[]; q?: string }): Paginated<TestRun> {
