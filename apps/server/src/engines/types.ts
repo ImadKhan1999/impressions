@@ -34,15 +34,18 @@ export function outcomeFor(finalStatus: number | null, errorCode: ErrorCode | nu
 export function classifyError(err: unknown): { code: ErrorCode; message: string } {
   const e = err as { code?: string; name?: string; message?: string; cause?: unknown };
   const code = e?.code ?? '';
-  const msg = e?.message ?? String(err);
+  // Only classify on the first line: Playwright appends a call log that may contain URLs.
+  const msg = (e?.message ?? String(err)).split('\n')[0]!.trim();
   const lower = msg.toLowerCase();
 
   if (e?.name === 'AbortError' || code === 'ABORT_ERR') return { code: 'ABORTED', message: 'Aborted' };
-  if (e?.name === 'TimeoutError' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || /timeout|timed out/.test(lower))
+  if (e?.name === 'TimeoutError' || code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || /timeout|timed out|timed_out/.test(lower))
     return { code: 'TIMEOUT', message: msg };
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /err_name_not_resolved|getaddrinfo|ns_error_unknown_host|could not resolve/.test(lower))
     return { code: 'DNS_FAILURE', message: msg };
-  if (code === 'ECONNREFUSED' || /err_connection_refused|ns_error_connection_refused|could not connect/.test(lower))
+  if (/err_unsafe_port|err_blocked_by_client|err_blocked_by_response/.test(lower))
+    return { code: 'UNSUPPORTED', message: msg };
+  if (code === 'ECONNREFUSED' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || /err_address_unreachable|err_internet_disconnected/.test(lower) || /err_connection_refused|ns_error_connection_refused|could not connect/.test(lower))
     return { code: 'CONNECTION_REFUSED', message: msg };
   if (code === 'ECONNRESET' || code === 'EPIPE' || /err_connection_reset|err_empty_response|socket hang up|ns_error_net_reset|connection was reset/.test(lower))
     return { code: 'CONNECTION_RESET', message: msg };
