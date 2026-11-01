@@ -206,6 +206,7 @@ export interface TaskResultDetails {
   title?: string | null;
   contentType?: string | null;
   jsRedirectSuspected?: boolean;
+  viewportMeta?: string | null;
   cookies?: CookieInfo[];
   layout?: LayoutInfo | null;
   consoleErrors?: string[];
