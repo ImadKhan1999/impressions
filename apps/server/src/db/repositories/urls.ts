@@ -162,10 +162,4 @@ export class UrlRepository {
   countLists(): number {
     return (this.db.prepare('SELECT COUNT(*) AS c FROM url_lists').get() as { c: number }).c;
   }
-
-  *iterateUrls(listId: number): Generator<UrlEntry> {
-    for (const r of this.db.prepare('SELECT * FROM urls WHERE list_id = ? ORDER BY id').iterate(listId)) {
-      yield urlTo(r as UrlRow);
-    }
-  }
 }

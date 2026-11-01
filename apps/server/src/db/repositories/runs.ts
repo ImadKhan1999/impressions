@@ -502,10 +502,11 @@ export class RunRepository {
     return { items: rows.map(taskTo), total, page: o.page, pageSize: o.pageSize };
   }
 
-  *iterateTasks(runId: number): Generator<TestTask> {
-    for (const r of this.db.prepare(`${TASK_SELECT} WHERE t.run_id = ? ORDER BY t.id`).iterate(runId)) {
-      yield taskTo(r as TaskRow);
-    }
+  /** Keyset pagination over a run's tasks (safe to interleave with other queries, unlike iterate()). */
+  tasksAfter(runId: number, afterId: number, limit: number): TestTask[] {
+    return (
+      this.db.prepare(`${TASK_SELECT} WHERE t.run_id = ? AND t.id > ? ORDER BY t.id LIMIT ?`).all(runId, afterId, limit) as TaskRow[]
+    ).map(taskTo);
   }
 
   /* ----------------------------- analytics -------------------------- */

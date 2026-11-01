@@ -332,11 +332,21 @@ export class ProfileRepository {
     return n;
   }
 
-  /** Streams all profiles (for export) without loading them all at once. */
+  /**
+   * Streams profiles (for export) in keyset pages, so other queries can run
+   * between pages while the response is being written.
+   */
   *iterate(filter: ProfileFilter = {}): Generator<DeviceProfile> {
     const { sql, params } = buildProfileWhere(filter);
-    for (const r of this.db.prepare(`SELECT * FROM device_profiles ${sql} ORDER BY id`).iterate(...params)) {
-      yield rowToProfile(r as ProfileRow);
+    const where = sql ? `${sql} AND id > ?` : 'WHERE id > ?';
+    let last = 0;
+    for (;;) {
+      const rows = this.db
+        .prepare(`SELECT * FROM device_profiles ${where} ORDER BY id LIMIT 1000`)
+        .all(...params, last) as ProfileRow[];
+      if (!rows.length) return;
+      for (const r of rows) yield rowToProfile(r);
+      last = rows[rows.length - 1]!.id;
     }
   }
 }

@@ -19,6 +19,7 @@
     "fastify": "^5.6.0",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
+    "pino": "^9.14.0",
     "pino-pretty": "^13.1.1",
     "playwright": "~1.63.0",
     "socks-proxy-agent": "^8.0.5",
