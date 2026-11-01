@@ -168,7 +168,7 @@ applied inside a transaction and recorded in `schema_migrations`. Repositories
 expose typed methods and prepared statements; no SQL outside `db/`.
 
 ### profiles
-* `catalog/` holds curated, static data: ~90 devices (phones, tablets, laptops,
+* `catalog/` holds curated, static data: ~130 devices (phones, tablets, laptops,
   desktops across Android, iOS/iPadOS, Windows, macOS, Linux) with real viewport,
   screen and DPR values; OS version lists per platform; browser families with
   version ranges per platform (Chrome, Edge, Firefox, Safari, Samsung Internet,
@@ -474,7 +474,7 @@ and toasts for every mutation result.
 | --- | --- |
 | **Dashboard** | KPI cards (URLs, profiles, runs, success rate over last 7 days), active runs with live progress bars and throughput, status breakdown donut, error code bar chart, recent runs table. |
 | **Test runs** | Filterable run history table (status, mode, progress, success %, duration). "New test run" wizard: 1) URLs (pick list) 2) Profiles (faceted picker with select-all-matching, preview of task count) 3) Network (no proxy or one proxy) 4) Engine and limits (mode, concurrency, rate limits with caps shown, timeouts, capture options) 5) Review. |
-| **Run detail** | Header with status, controls (start/pause/resume/cancel/duplicate), live progress, ETA, throughput sparkline; tabs: *Results* (virtualised task table with status/engine/profile/domain filters), *Summary* (status breakdown, top errors, slowest domains, final-domain distribution, mobile vs desktop comparison), *Export* (CSV/JSON/HTML). Task drawer: redirect chain timeline (hop type, status, URL, time), final page info, cookies, layout metrics, console errors, screenshot. |
+| **Run detail** | Header with status, controls (start/pause/resume/cancel/duplicate), live progress, ETA, throughput sparkline; tabs: *Results* (server-paginated task table with status/engine/profile/domain filters), *Summary* (status breakdown, top errors, slowest domains, final-domain distribution, mobile vs desktop comparison), *Export* (CSV/JSON/HTML). Task drawer: redirect chain timeline (hop type, status, URL, time), final page info, cookies, layout metrics, console errors, screenshot. |
 | **URL lists** | Lists with counts; list detail with searchable paginated URL table, add URLs box, drag-and-drop TXT/CSV import with an import report (accepted, duplicates, rejected with line numbers). |
 | **Device profiles** | Server-paginated library (handles 10k+) with facets (platform, form factor, browser, engine, source, enabled), bulk enable/disable/delete, create/edit form with live UA preview, Profile builder (devices x OS versions x browsers x versions -> preview count -> generate), JSON import/export. |
 | **Proxies** | Proxy table with protocol, host, last test result; add/edit dialog (password write-only); test button. Banner explaining one-proxy-per-run. |
